@@ -1,0 +1,57 @@
+{
+  "name": "PCD-1",
+  "questions": [
+    {
+      "id": "thread-definition",
+      "question": "O que é uma thread?",
+      "points": 5,
+      "correct": 3,
+      "options": [
+        "Processo",
+        "Aplicação",
+        "Programa",
+        "Fluxo de execução"
+      ],
+      "type": "INDIVIDUAL"
+    },
+    {
+      "id": "blocking-method",
+      "question": "Qual destas opções corresponde a um método bloqueante?",
+      "points": 3,
+      "correct": 2,
+      "options": [
+        "join()",
+        "sleep(<millis>)",
+        "interrupted()",
+        "wait()"
+      ],
+      "type": "TEAM"
+    },
+    {
+      "id": "scheduling",
+      "question": "Que entidade decide quando uma thread é escalonada?",
+      "points": 4,
+      "correct": 1,
+      "options": [
+        "Escalonador do sistema operativo",
+        "Compilador",
+        "Programador",
+        "Memória principal"
+      ],
+      "type": "INDIVIDUAL"
+    },
+    {
+      "id": "synchronization",
+      "question": "Que mecanismo permite que múltiplas threads aguardem um estado comum?",
+      "points": 4,
+      "correct": 4,
+      "options": [
+        "Thread.sleep()",
+        "ExecutorService",
+        "Runnable",
+        "CountDownLatch"
+      ],
+      "type": "TEAM"
+    }
+  ]
+}

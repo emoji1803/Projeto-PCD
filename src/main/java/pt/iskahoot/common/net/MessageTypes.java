@@ -1,0 +1,15 @@
+package pt.iskahoot.common.net;
+
+/**
+ * Enumerates the message types currently supported by the handshake protocol.
+ */
+public final class MessageTypes {
+
+    private MessageTypes() {
+    }
+
+    public static final String JOIN_REQUEST = "JOIN_REQUEST";
+    public static final String JOIN_ACCEPTED = "JOIN_ACCEPTED";
+    public static final String JOIN_REJECTED = "JOIN_REJECTED";
+    public static final String SERVER_INFO = "SERVER_INFO";
+}
