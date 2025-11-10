@@ -5,7 +5,7 @@ import java.nio.file.Paths;
 import java.util.Objects;
 
 /**
- * Parsed command line options for the server process.
+ * Representa as opções de linha de comandos do processo de servidor.
  */
 public record ServerOptions(int port, Path questionsPath) {
 

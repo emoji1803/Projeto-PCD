@@ -14,7 +14,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Orchestrates creation and lookup of running games.
+ * Orquestra a criação e gestão dos jogos ativos no servidor.
  */
 public final class GameManager {
 
@@ -33,6 +33,7 @@ public final class GameManager {
             throw new IllegalArgumentException("Not enough questions to create the game");
         }
 
+        // Cada jogo recebe um código único e um subconjunto aleatório das perguntas disponíveis.
         String code = generateUniqueCode();
         List<Question> selected = selectQuestions(pool, configuration.questionsPerGame());
         GameState game = new GameState(code, configuration, selected);
@@ -67,6 +68,7 @@ public final class GameManager {
         return copy.subList(0, count);
     }
 
+    // Geração pseudoaleatória de códigos em base32 simplificada, evitando visuais ambíguos.
     private String generateUniqueCode() {
         String code;
         do {

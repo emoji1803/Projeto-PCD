@@ -1,7 +1,7 @@
 package pt.iskahoot.common.net;
 
 /**
- * Enumerates the message types currently supported by the handshake protocol.
+ * Enumera os tipos de mensagem atualmente suportados no protocolo de handshake.
  */
 public final class MessageTypes {
 

@@ -10,8 +10,8 @@ import java.util.Locale;
 import java.util.Scanner;
 
 /**
- * Simple text-based interface to manage server commands during the initial
- * milestone.
+ * Interface textual simples para gerir comandos do servidor nesta fase
+ * inicial.
  */
 public final class ServerCli implements Runnable {
 

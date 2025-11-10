@@ -3,8 +3,8 @@ package pt.iskahoot.common.model;
 import java.util.Objects;
 
 /**
- * Basic player metadata. Scores and per-round information live in the server
- * side game state.
+ * Metadados básicos de um jogador. Pontuações e informação por ronda vivem
+ * no estado do jogo do lado do servidor.
  */
 public final class Player {
 

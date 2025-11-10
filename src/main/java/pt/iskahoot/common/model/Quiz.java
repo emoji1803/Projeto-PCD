@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * A quiz is the collection of questions that may feed several games.
+ * Um quiz é o conjunto de perguntas que pode alimentar vários jogos.
  */
 public final class Quiz {
 

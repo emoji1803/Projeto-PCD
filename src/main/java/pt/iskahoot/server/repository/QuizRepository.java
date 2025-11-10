@@ -20,8 +20,8 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Loads quiz definitions from JSON files. The expected format matches the
- * specification provided in the project statement.
+ * Carrega definições de quizzes a partir de ficheiros JSON, respeitando o
+ * formato descrito no enunciado.
  */
 public final class QuizRepository {
 
@@ -93,7 +93,7 @@ public final class QuizRepository {
         }
 
         int correctIndex = object.get("correct").getAsInt();
-        // Specification uses 1-based indices. Convert to 0-based.
+        // O enunciado define índices a partir de 1; convertemos para base 0 usada internamente.
         correctIndex = correctIndex - 1;
         if (correctIndex < 0 || correctIndex >= options.size()) {
             throw new JsonParseException("correct index out of bounds for question: " + prompt);

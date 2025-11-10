@@ -13,8 +13,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Coordinates the networking aspects of the server: accepts incoming client
- * connections and dispatches them to dedicated handlers.
+ * Coordena a vertente de rede do servidor: aceita ligações dos clientes e
+ * delega a gestão para handlers dedicados.
  */
 public final class ServerRuntime implements AutoCloseable {
 
@@ -56,6 +56,7 @@ public final class ServerRuntime implements AutoCloseable {
             try {
                 Socket socket = serverSocket.accept();
                 LOGGER.info("Accepted connection from {}", socket.getRemoteSocketAddress());
+                // Cada ligação é tratada por uma thread do executor, permitindo múltiplos clientes.
                 clientExecutor.submit(new ClientConnectionHandler(socket, gameManager));
             } catch (IOException ex) {
                 if (running.get()) {

@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * Entry point for the IsKahoot server process.
+ * Ponto de entrada do processo de servidor IsKahoot.
  */
 public final class IsKahootServer {
 

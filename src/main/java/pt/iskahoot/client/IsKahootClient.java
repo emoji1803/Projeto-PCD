@@ -17,9 +17,9 @@ import java.util.Objects;
 import java.util.Scanner;
 
 /**
- * Entry point for the IsKahoot client. For the intermediate milestone it
- * performs the initial handshake with the server and displays basic feedback
- * about the registered game and teams.
+ * Ponto de entrada do cliente IsKahoot. Nesta entrega intermédia limita-se
+ * a negociar o handshake inicial com o servidor e a apresentar informação
+ * básica sobre o jogo e as equipas registadas.
  */
 public final class IsKahootClient {
 
@@ -33,8 +33,11 @@ public final class IsKahootClient {
              BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
              BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
 
+            // Etapa 1: recolher informação geral do servidor, incluindo jogos ativos.
             readServerInfo(reader);
+            // Etapa 2: enviar pedido de adesão com código de jogo, equipa e utilizador.
             sendJoinRequest(writer, options);
+            // Etapa 3: aguardar resposta do servidor e apresentar feedback ao utilizador.
             awaitJoinResponse(reader);
         }
     }
@@ -44,6 +47,7 @@ public final class IsKahootClient {
         if (line == null) {
             throw new IOException("Ligação terminada antes de receber informação do servidor");
         }
+        // O servidor inicia sempre com uma mensagem SERVER_INFO que descreve o estado atual.
         Message info = Message.fromJson(line);
         if (!MessageTypes.SERVER_INFO.equals(info.type())) {
             System.out.println("Aviso: servidor enviou mensagem inesperada: " + info.type());
@@ -72,6 +76,7 @@ public final class IsKahootClient {
         payload.addProperty("gameCode", options.gameCode());
         payload.addProperty("teamName", options.teamName());
         payload.addProperty("username", options.username());
+        // O pedido segue o protocolo definido: cada mensagem é JSON com type/payload.
         Message join = new Message(MessageTypes.JOIN_REQUEST, payload);
         writer.write(join.toJson());
         writer.newLine();
@@ -85,6 +90,7 @@ public final class IsKahootClient {
         }
 
         Message message = Message.fromJson(response);
+        // A resposta pode ser JOIN_ACCEPTED (com resumo do jogo) ou JOIN_REJECTED.
         switch (message.type()) {
             case MessageTypes.JOIN_ACCEPTED -> displayJoinAccepted(message);
             case MessageTypes.JOIN_REJECTED -> displayJoinRejected(message);

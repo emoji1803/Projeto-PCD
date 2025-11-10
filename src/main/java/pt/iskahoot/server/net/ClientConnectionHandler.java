@@ -19,8 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
- * Handles a single client connection. For the intermediate milestone the logic
- * is limited to the join handshake.
+ * Gere uma ligação individual de cliente. Nesta entrega a lógica abrange
+ * apenas o handshake de adesão ao jogo.
  */
 public final class ClientConnectionHandler implements Runnable {
 
@@ -40,6 +40,7 @@ public final class ClientConnectionHandler implements Runnable {
              BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
              BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
 
+            // A conversa começa sempre com um resumo do servidor enviado proativamente.
             sendServerInfo(writer);
 
             String line = reader.readLine();
@@ -83,6 +84,7 @@ public final class ClientConnectionHandler implements Runnable {
                 return;
             }
 
+            // Resposta positiva inclui fotografia das equipas já registadas.
             sendJoinAccepted(writer, gameState);
             LOGGER.info("Player {} joined game {} (team {})", username, gameCode, teamName);
         } catch (IOException ex) {

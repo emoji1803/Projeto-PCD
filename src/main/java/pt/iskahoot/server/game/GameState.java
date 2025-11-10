@@ -13,9 +13,9 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Keeps the mutable state of a game session. For the intermediate milestone the
- * class focuses on registration and setup logic; question coordination will be
- * added later.
+ * Guarda o estado mutável de uma sessão de jogo. Nesta entrega o foco é
+ * gerir registos e configuração inicial; a coordenação de rondas será
+ * acrescentada em fases seguintes.
  */
 public final class GameState {
 
@@ -57,6 +57,8 @@ public final class GameState {
     }
 
     public synchronized RegistrationResult registerPlayer(String teamName, String username) {
+        // Bloqueio externo garante que dois jogadores não entram simultaneamente
+        // na mesma fase de validação, evitando duplicações.
         if (playersByUsername.containsKey(username)) {
             return RegistrationResult.rejected("Username is already in use: " + username);
         }

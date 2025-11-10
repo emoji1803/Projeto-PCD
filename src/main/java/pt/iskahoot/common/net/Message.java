@@ -7,8 +7,8 @@ import com.google.gson.JsonObject;
 import java.util.Objects;
 
 /**
- * Lightweight wrapper around JSON messages exchanged between client and server.
- * Each message is encoded as a single JSON object followed by a newline.
+ * Invólucro simples para as mensagens JSON trocadas entre cliente e servidor.
+ * Cada mensagem é enviada como um objeto seguido de newline.
  */
 public final class Message {
 

@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Represents a team within a game.
+ * Representa uma equipa dentro de um jogo.
  */
 public final class Team {
 
@@ -30,6 +30,7 @@ public final class Team {
     }
 
     public synchronized void addPlayer(Player player) {
+        // Sincronização simples para evitar corrupções quando vários jogadores entram ao mesmo tempo.
         players.add(player);
     }
 
