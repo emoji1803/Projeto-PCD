@@ -53,6 +53,7 @@ public final class ServerCli implements Runnable {
             Comandos disponíveis:
               new <equipas> <jogadores_por_equipa> <perguntas>
               list
+              questions
               help
               exit
             """);
@@ -65,6 +66,7 @@ public final class ServerCli implements Runnable {
             switch (command) {
                 case "new" -> createNewGame(parts);
                 case "list" -> listGames();
+                case "questions" -> listQuestions();
                 case "help" -> printHeader();
                 case "exit", "quit" -> stop();
                 default -> System.out.println("Comando desconhecido. Escreva 'help' para ajuda.");
@@ -111,5 +113,25 @@ public final class ServerCli implements Runnable {
     private void stop() {
         running = false;
         System.out.println("A terminar CLI do servidor...");
+    }
+
+    private void listQuestions() {
+        if (questionPool.isEmpty()) {
+            System.out.println("Nenhuma pergunta carregada.");
+            return;
+        }
+
+        int index = 1;
+        for (Question question : questionPool) {
+            System.out.printf("%d) [%s | %d pts] %s%n",
+                index++,
+                question.type(),
+                question.points(),
+                question.prompt());
+            for (int i = 0; i < question.options().size(); i++) {
+                System.out.printf("   %d) %s%n", i + 1, question.options().get(i));
+            }
+            System.out.println();
+        }
     }
 }
