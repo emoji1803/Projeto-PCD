@@ -51,7 +51,7 @@ public final class ServerCli implements Runnable {
         System.out.println("""
             Bem-vindo ao IsKahoot!
             Comandos disponíveis:
-              new <equipas> <jogadores_por_equipa> <perguntas>
+              new <equipas> <jogadores_por_equipa> <perguntas> [<codigo>]
               list
               questions
               help
@@ -78,17 +78,24 @@ public final class ServerCli implements Runnable {
     }
 
     private void createNewGame(String[] parts) {
-        if (parts.length != 4) {
-            throw new IllegalArgumentException("Uso: new <equipas> <jogadores_por_equipa> <perguntas>");
+        if (parts.length < 4 || parts.length > 5) {
+            throw new IllegalArgumentException("Uso: new <equipas> <jogadores_por_equipa> <perguntas> [<codigo>]");
         }
         try {
             int teams = Integer.parseInt(parts[1]);
             int playersPerTeam = Integer.parseInt(parts[2]);
             int questionsPerGame = Integer.parseInt(parts[3]);
+            String requestedCode = parts.length == 5 ? parts[4] : null;
 
             GameConfiguration config = new GameConfiguration(teams, playersPerTeam, questionsPerGame);
-            var game = gameManager.createGame(config, questionPool);
-            System.out.printf("Jogo criado com código %s%n", game.code());
+            var game = requestedCode == null
+                ? gameManager.createGame(config, questionPool)
+                : gameManager.createGame(requestedCode, config, questionPool);
+            if (requestedCode == null) {
+                System.out.printf("Jogo criado com código %s%n", game.code());
+            } else {
+                System.out.printf("Jogo criado com código personalizado %s%n", game.code());
+            }
         } catch (NumberFormatException ex) {
             throw new IllegalArgumentException("Os parâmetros devem ser números inteiros positivos", ex);
         }
