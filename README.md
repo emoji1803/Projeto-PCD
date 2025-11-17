@@ -39,7 +39,7 @@ mvn exec:java -Dexec.mainClass=pt.iskahoot.server.IsKahootServer \
 
 Comandos disponíveis na consola do servidor:
 
-- `new <equipas> <jogadores_por_equipa> <perguntas>`
+- `new <equipas> <jogadores_por_equipa> <perguntas> [<codigo>]`
 - `list`
 - `help`
 - `exit`

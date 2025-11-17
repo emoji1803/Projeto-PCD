@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -27,18 +28,14 @@ public final class GameManager {
     }
 
     public GameState createGame(GameConfiguration configuration, List<Question> pool) {
-        Objects.requireNonNull(configuration, "configuration must not be null");
-        Objects.requireNonNull(pool, "pool must not be null");
-        if (pool.size() < configuration.questionsPerGame()) {
-            throw new IllegalArgumentException("Not enough questions to create the game");
-        }
-
-        // Cada jogo recebe um código único e um subconjunto aleatório das perguntas disponíveis.
         String code = generateUniqueCode();
-        List<Question> selected = selectQuestions(pool, configuration.questionsPerGame());
-        GameState game = new GameState(code, configuration, selected);
-        gamesByCode.put(code, game);
-        return game;
+        return createGame(code, configuration, pool);
+    }
+
+    public GameState createGame(String requestedCode, GameConfiguration configuration, List<Question> pool) {
+        Objects.requireNonNull(requestedCode, "requestedCode must not be null");
+        String normalizedCode = normalizeCode(requestedCode);
+        return createGameInternal(normalizedCode, configuration, pool);
     }
 
     public Optional<GameState> findGame(String code) {
@@ -60,6 +57,22 @@ public final class GameManager {
             state.configuration(),
             state.createdAt(),
             state.registeredPlayers());
+    }
+
+    private GameState createGameInternal(String code, GameConfiguration configuration, List<Question> pool) {
+        Objects.requireNonNull(configuration, "configuration must not be null");
+        Objects.requireNonNull(pool, "pool must not be null");
+        if (pool.size() < configuration.questionsPerGame()) {
+            throw new IllegalArgumentException("Not enough questions to create the game");
+        }
+
+        List<Question> selected = selectQuestions(pool, configuration.questionsPerGame());
+        GameState game = new GameState(code, configuration, selected);
+        GameState previous = gamesByCode.putIfAbsent(code, game);
+        if (previous != null) {
+            throw new IllegalArgumentException("Game code already in use: " + code);
+        }
+        return game;
     }
 
     private List<Question> selectQuestions(List<Question> pool, int count) {
@@ -85,6 +98,14 @@ public final class GameManager {
             sb.append(alphabet.charAt(idx));
         }
         return sb.toString();
+    }
+
+    private String normalizeCode(String code) {
+        String trimmed = code.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("Game code must not be blank");
+        }
+        return trimmed.toUpperCase(Locale.ROOT);
     }
 
     public record GameDescriptor(String code,
