@@ -17,9 +17,8 @@ import java.util.Objects;
 import java.util.Scanner;
 
 /**
- * Ponto de entrada do cliente IsKahoot. Nesta entrega intermédia limita-se
- * a negociar o handshake inicial com o servidor e a apresentar informação
- * básica sobre o jogo e as equipas registadas.
+ * Ponto de entrada do cliente IsKahoot. Negocia o handshake inicial com o servidor e apresenta informação
+ * básica sobre o jogo e as equipas registadas. Usamos o GSon para parsear o JSON.
  */
 public final class IsKahootClient {
 
@@ -31,14 +30,24 @@ public final class IsKahootClient {
         System.out.printf("A ligar a %s:%d...%n", options.host(), options.port());
         try (Socket socket = new Socket(options.host(), options.port());
              BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
+             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+             Scanner scanner = new Scanner(System.in)) {
 
-            // Etapa 1: recolher informação geral do servidor, incluindo jogos ativos.
+            // Etapa 1: recolher info geral do servidor, incluindo jogos ativos
             readServerInfo(reader);
-            // Etapa 2: enviar pedido de adesão com código de jogo, equipa e utilizador.
+            
+            // Etapa 2: enviar pedido de adesão com código de jogo, equipa e utilizador
             sendJoinRequest(writer, options);
-            // Etapa 3: aguardar resposta do servidor e apresentar feedback ao utilizador.
-            awaitJoinResponse(reader);
+            
+            // Etapa 3: aguardar resposta do servidor
+            if (!awaitJoinResponse(reader)) {
+                return; // Conexão rejeitada
+            }
+
+            // Etapa 4: Loop de jogo - processar mensagens do servidor
+            gameLoop(reader, writer, scanner);
+            
+            System.out.println("\nObrigado por jogar IsKahoot!");
         }
     }
 
@@ -47,7 +56,7 @@ public final class IsKahootClient {
         if (line == null) {
             throw new IOException("Ligação terminada antes de receber informação do servidor");
         }
-        // O servidor inicia sempre com uma mensagem SERVER_INFO que descreve o estado atual.
+        // O servidor manda sempre uma mensagem SERVER_INFO que descreve o estado atual.
         Message info = Message.fromJson(line);
         if (!MessageTypes.SERVER_INFO.equals(info.type())) {
             System.out.println("Aviso: servidor enviou mensagem inesperada: " + info.type());
@@ -83,19 +92,176 @@ public final class IsKahootClient {
         writer.flush();
     }
 
-    private static void awaitJoinResponse(BufferedReader reader) throws IOException {
+    private static boolean awaitJoinResponse(BufferedReader reader) throws IOException {
         String response = reader.readLine();
         if (response == null) {
             throw new IOException("Ligação terminou sem resposta do servidor");
         }
 
         Message message = Message.fromJson(response);
-        // A resposta pode ser JOIN_ACCEPTED (com resumo do jogo) ou JOIN_REJECTED.
+        // A resposta pode ser JOIN_ACCEPTED (jogo continua) ou JOIN_REJECTED.
         switch (message.type()) {
-            case MessageTypes.JOIN_ACCEPTED -> displayJoinAccepted(message);
-            case MessageTypes.JOIN_REJECTED -> displayJoinRejected(message);
-            default -> System.out.println("Resposta inesperada: " + message.type());
+            case MessageTypes.JOIN_ACCEPTED -> {
+                displayJoinAccepted(message);
+                return true;
+            }
+            case MessageTypes.JOIN_REJECTED -> {
+                displayJoinRejected(message);
+                return false;
+            }
+            default -> {
+                System.out.println("Resposta inesperada: " + message.type());
+                return false;
+            }
         }
+    }
+
+    /**
+     * Loop principal do jogo - processa mensagens do servidor.
+     */
+    private static void gameLoop(BufferedReader reader, BufferedWriter writer, Scanner scanner) throws IOException {
+        String line;
+        boolean gameActive = true;
+        
+        while (gameActive && (line = reader.readLine()) != null) {
+            Message message = Message.fromJson(line);
+            
+            switch (message.type()) {
+                case MessageTypes.GAME_START -> handleGameStart(message);
+                case MessageTypes.QUESTION -> handleQuestion(message, writer, scanner);
+                case MessageTypes.ROUND_END -> handleRoundEnd(message);
+                case MessageTypes.GAME_END -> {
+                    handleGameEnd(message);
+                    gameActive = false;
+                }
+                case MessageTypes.WAITING_FOR_PLAYERS -> handleWaitingForPlayers(message);
+                default -> System.out.println("Mensagem não reconhecida: " + message.type());
+            }
+        }
+    }
+
+    private static void handleGameStart(Message message) {
+        System.out.println("\n" + "=".repeat(60));
+        System.out.println("🎮 O JOGO COMEÇOU! 🎮");
+        System.out.println("=".repeat(60));
+        System.out.printf("Jogo: %s%n", message.payload().get("gameCode").getAsString());
+        System.out.printf("Total de perguntas: %d%n", message.payload().get("totalQuestions").getAsInt());
+        System.out.println("=".repeat(60) + "\n");
+    }
+
+    private static void handleQuestion(Message message, BufferedWriter writer, Scanner scanner) throws IOException {
+        JsonObject payload = message.payload();
+        
+        int questionNumber = payload.get("questionNumber").getAsInt();
+        int totalQuestions = payload.get("totalQuestions").getAsInt();
+        String prompt = payload.get("prompt").getAsString();
+        int points = payload.get("points").getAsInt();
+        String type = payload.get("type").getAsString();
+        int timeLimit = payload.get("timeLimit").getAsInt();
+        JsonArray options = payload.getAsJsonArray("options");
+
+        System.out.println("\n" + "-".repeat(60));
+        System.out.printf("📝 PERGUNTA %d/%d [%s] (%d pontos)%n", questionNumber, totalQuestions, type, points);
+        System.out.println("-".repeat(60));
+        System.out.println(prompt);
+        System.out.println();
+        
+        for (int i = 0; i < options.size(); i++) {
+            System.out.printf("  %d) %s%n", i, options.get(i).getAsString());
+        }
+        
+        System.out.println("-".repeat(60));
+        System.out.printf("Tempo limite: %d segundos%n", timeLimit);
+        System.out.printf("Sua resposta (0-%d): ", options.size() - 1);
+        
+        long startTime = System.currentTimeMillis();
+        
+        // Ler resposta do utilizador
+        int answer = -1;
+        try {
+            if (scanner.hasNextLine()) {
+                String input = scanner.nextLine().trim();
+                answer = Integer.parseInt(input);
+                
+                if (answer < 0 || answer >= options.size()) {
+                    System.out.println("⚠️  Resposta inválida! Será registada como incorreta.");
+                    answer = -1;
+                }
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("⚠️  Resposta inválida! Será registada como incorreta.");
+            answer = -1;
+        }
+        
+        long responseTime = System.currentTimeMillis() - startTime;
+        
+        // Enviar resposta ao servidor
+        sendAnswer(writer, answer, responseTime);
+        System.out.println("✓ Resposta enviada!");
+    }
+
+    private static void sendAnswer(BufferedWriter writer, int answerIndex, long responseTime) throws IOException {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("answerIndex", answerIndex);
+        payload.addProperty("responseTime", responseTime);
+        
+        Message message = new Message(MessageTypes.ANSWER, payload);
+        writer.write(message.toJson());
+        writer.newLine();
+        writer.flush();
+    }
+
+    private static void handleRoundEnd(Message message) {
+        JsonObject payload = message.payload();
+        
+        int questionNumber = payload.get("questionNumber").getAsInt();
+        int correctAnswer = payload.get("correctAnswer").getAsInt();
+        String correctOption = payload.get("correctOption").getAsString();
+        
+        System.out.println("\n" + "=".repeat(60));
+        System.out.println("📊 FIM DA RONDA " + questionNumber);
+        System.out.println("=".repeat(60));
+        System.out.printf("✓ Resposta correta: %d) %s%n", correctAnswer, correctOption);
+        System.out.println();
+        System.out.println("PLACAR ATUAL:");
+        
+        JsonArray leaderboard = payload.getAsJsonArray("leaderboard");
+        for (int i = 0; i < leaderboard.size(); i++) {
+            JsonObject team = leaderboard.get(i).getAsJsonObject();
+            System.out.printf("  %d. %s - %d pontos (%d jogadores)%n",
+                i + 1,
+                team.get("name").getAsString(),
+                team.get("score").getAsInt(),
+                team.get("players").getAsInt());
+        }
+        System.out.println("=".repeat(60) + "\n");
+    }
+
+    private static void handleGameEnd(Message message) {
+        JsonObject payload = message.payload();
+        JsonArray finalLeaderboard = payload.getAsJsonArray("finalLeaderboard");
+        
+        System.out.println("\n" + "=".repeat(60));
+        System.out.println("🏆 FIM DE JOGO! 🏆");
+        System.out.println("=".repeat(60));
+        System.out.println("CLASSIFICAÇÃO FINAL:");
+        System.out.println();
+        
+        for (int i = 0; i < finalLeaderboard.size(); i++) {
+            JsonObject team = finalLeaderboard.get(i).getAsJsonObject();
+            String medal = i == 0 ? "🥇" : i == 1 ? "🥈" : i == 2 ? "🥉" : "  ";
+            System.out.printf("%s %d. %s - %d pontos (%d jogadores)%n",
+                medal,
+                i + 1,
+                team.get("name").getAsString(),
+                team.get("score").getAsInt(),
+                team.get("players").getAsInt());
+        }
+        System.out.println("=".repeat(60));
+    }
+
+    private static void handleWaitingForPlayers(Message message) {
+        System.out.println("⏳ Aguardando mais jogadores para iniciar o jogo...");
     }
 
     private static void displayJoinAccepted(Message message) {
@@ -124,7 +290,7 @@ public final class IsKahootClient {
     }
 
     /**
-     * Aggregates user-provided options.
+     * opcoes ao user
      */
     public record ClientOptions(String host, int port, String gameCode, String teamName, String username) {
 

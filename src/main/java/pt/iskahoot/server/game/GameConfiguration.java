@@ -3,7 +3,7 @@ package pt.iskahoot.server.game;
 import java.util.Objects;
 
 /**
- * Configuração imutável de um jogo criada através da TUI do servidor.
+ * Configuração do jogo que criamos no projeto.
  */
 public final class GameConfiguration {
 

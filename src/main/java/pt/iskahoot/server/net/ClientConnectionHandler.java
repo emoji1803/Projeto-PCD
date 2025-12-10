@@ -4,8 +4,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import pt.iskahoot.common.model.Question;
+import pt.iskahoot.common.model.QuestionType;
 import pt.iskahoot.common.net.Message;
 import pt.iskahoot.common.net.MessageTypes;
+import pt.iskahoot.server.coordination.Barrier;
+import pt.iskahoot.server.coordination.ModifiedCountDownLatch;
 import pt.iskahoot.server.game.GameManager;
 import pt.iskahoot.server.game.GameState;
 
@@ -19,8 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
- * Gere uma ligação individual de cliente. Nesta entrega a lógica abrange
- * apenas o handshake de adesão ao jogo.
+ * Gere uma ligação individual de cliente durante todo o ciclo de jogo.
  */
 public final class ClientConnectionHandler implements Runnable {
 
@@ -28,6 +31,9 @@ public final class ClientConnectionHandler implements Runnable {
 
     private final Socket socket;
     private final GameManager gameManager;
+    private String username;
+    private String teamName;
+    private GameState gameState;
 
     public ClientConnectionHandler(Socket socket, GameManager gameManager) {
         this.socket = Objects.requireNonNull(socket, "socket must not be null");
@@ -40,7 +46,7 @@ public final class ClientConnectionHandler implements Runnable {
              BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
              BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))) {
 
-            // A conversa começa sempre com um resumo do servidor enviado proativamente.
+            // Inicialmente envio um resumo do servidor
             sendServerInfo(writer);
 
             String line = reader.readLine();
@@ -63,8 +69,8 @@ public final class ClientConnectionHandler implements Runnable {
             }
 
             String gameCode = message.payload().get("gameCode").getAsString().trim();
-            String teamName = message.payload().get("teamName").getAsString().trim();
-            String username = message.payload().get("username").getAsString().trim();
+            this.teamName = message.payload().get("teamName").getAsString().trim();
+            this.username = message.payload().get("username").getAsString().trim();
 
             if (gameCode.isEmpty() || teamName.isEmpty() || username.isEmpty()) {
                 sendJoinRejected(writer, "Join request fields must not be blank");
@@ -77,18 +83,91 @@ public final class ClientConnectionHandler implements Runnable {
                 return;
             }
 
-            GameState gameState = gameOpt.get();
+            this.gameState = gameOpt.get();
             GameState.RegistrationResult result = gameState.registerPlayer(teamName, username);
             if (!result.accepted()) {
                 sendJoinRejected(writer, result.message());
                 return;
             }
 
-            // Resposta positiva inclui fotografia das equipas já registadas.
+            // Registar a conexão do jogador para broadcast de mensagens
+            gameState.registerPlayerConnection(username, writer);
+
+            // Resposta positiva inclui fotografia das equipas já registadas
             sendJoinAccepted(writer, gameState);
             LOGGER.info("Player {} joined game {} (team {})", username, gameCode, teamName);
+
+            // Manter conexão ativa e processar respostas durante o jogo
+            handleGameLoop(reader, writer);
+            
         } catch (IOException ex) {
-            LOGGER.error("Error handling client connection", ex);
+            LOGGER.error("Error handling client connection for user {}", username, ex);
+        } finally {
+            LOGGER.info("Connection closed for player {}", username);
+        }
+    }
+
+    /**
+     * Loop principal para processar mensagens do cliente durante o jogo.
+     */
+    private void handleGameLoop(BufferedReader reader, BufferedWriter writer) throws IOException {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            try {
+                Message message = Message.fromJson(line);
+                
+                if (MessageTypes.ANSWER.equals(message.type())) {
+                    handleAnswer(message);
+                } else {
+                    LOGGER.warn("Unexpected message type during game: {}", message.type());
+                }
+            } catch (Exception e) {
+                LOGGER.error("Error processing message from player {}", username, e);
+            }
+        }
+    }
+
+    /**
+     * Processa a resposta de um jogador.
+     */
+    private void handleAnswer(Message message) {
+        if (!message.payload().has("answerIndex")) {
+            LOGGER.warn("Answer message missing answerIndex from player {}", username);
+            return;
+        }
+
+        int answerIndex = message.payload().get("answerIndex").getAsInt();
+        long responseTime = message.payload().has("responseTime") 
+            ? message.payload().get("responseTime").getAsLong() 
+            : 0;
+
+        LOGGER.info("Player {} answered {} (response time: {}ms)", username, answerIndex, responseTime);
+
+        // Registar a resposta no estado do jogo
+        gameState.recordAnswer(username, answerIndex, responseTime);
+
+        // Coordenar com o mecanismo apropriado
+        Question currentQuestion = gameState.getCurrentQuestion();
+        if (currentQuestion == null) {
+            return;
+        }
+
+        if (currentQuestion.type() == QuestionType.INDIVIDUAL) {
+            // Perguntas individuais: decrementar CountDownLatch
+            ModifiedCountDownLatch latch = gameState.getCurrentCountDownLatch();
+            if (latch != null) {
+                int bonusFactor = latch.countDown();
+                LOGGER.debug("Player {} bonus factor: {}", username, bonusFactor);
+            }
+        } else {
+            // Perguntas de equipa: notificar barreira da equipa
+            Barrier barrier = gameState.getTeamBarrier(teamName);
+            if (barrier != null) {
+                boolean isLast = barrier.barrierAction();
+                if (isLast) {
+                    LOGGER.info("Team {} completed answering", teamName);
+                }
+            }
         }
     }
 

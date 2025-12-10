@@ -20,8 +20,8 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Carrega definições de quizzes a partir de ficheiros JSON, respeitando o
- * formato descrito no enunciado.
+ * Carrega definições de quizzes a partir de ficheiros JSON, 
+* Uso do GSon como sugerido no enunciado.
  */
 public final class QuizRepository {
 
