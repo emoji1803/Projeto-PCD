@@ -3,7 +3,7 @@ package pt.iskahoot.common.model;
 import java.util.Objects;
 
 /**
- * Metadados básicos de um jogador. Pontuações e informação por ronda vivem
+ * Metadados básicos do jogador que criamos no projeto. Pontuações e informação por ronda vivem
  * no estado do jogo do lado do servidor.
  */
 public final class Player {

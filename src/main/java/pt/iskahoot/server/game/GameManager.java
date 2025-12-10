@@ -3,7 +3,6 @@ package pt.iskahoot.server.game;
 import pt.iskahoot.common.model.Player;
 import pt.iskahoot.common.model.Question;
 
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Orquestra a criação e gestão dos jogos ativos no servidor.
@@ -19,11 +19,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class GameManager {
 
     private final Map<String, GameState> gamesByCode;
-    private final SecureRandom random;
+    private final List<GameState> gamesInOrder;
+    private final AtomicInteger gameCounter;
 
     public GameManager() {
         this.gamesByCode = new ConcurrentHashMap<>();
-        this.random = new SecureRandom();
+        this.gamesInOrder = Collections.synchronizedList(new ArrayList<>());
+        this.gameCounter = new AtomicInteger(0);
     }
 
     public GameState createGame(GameConfiguration configuration, List<Question> pool) {
@@ -33,11 +35,14 @@ public final class GameManager {
             throw new IllegalArgumentException("Not enough questions to create the game");
         }
 
-        // Cada jogo recebe um código único e um subconjunto aleatório das perguntas disponíveis.
-        String code = generateUniqueCode();
+        // Código sequencial: game0, game1, game2, etc.
+        int gameId = gameCounter.getAndIncrement();
+        String code = "game" + gameId;
+        
         List<Question> selected = selectQuestions(pool, configuration.questionsPerGame());
         GameState game = new GameState(code, configuration, selected);
         gamesByCode.put(code, game);
+        gamesInOrder.add(game);
         return game;
     }
 
@@ -47,11 +52,21 @@ public final class GameManager {
 
     public List<GameDescriptor> listGames() {
         List<GameDescriptor> descriptors = new ArrayList<>();
-        for (GameState state : gamesByCode.values()) {
-            descriptors.add(toDescriptor(state));
+        synchronized (gamesInOrder) {
+            for (GameState state : gamesInOrder) {
+                descriptors.add(toDescriptor(state));
+            }
         }
-        descriptors.sort((a, b) -> b.createdAt().compareTo(a.createdAt()));
         return descriptors;
+    }
+
+    /**
+     * Retorna a lista de GameStates em ordem de criação.
+     */
+    public List<GameState> getGamesInOrder() {
+        synchronized (gamesInOrder) {
+            return new ArrayList<>(gamesInOrder);
+        }
     }
 
     private GameDescriptor toDescriptor(GameState state) {
@@ -64,27 +79,8 @@ public final class GameManager {
 
     private List<Question> selectQuestions(List<Question> pool, int count) {
         List<Question> copy = new ArrayList<>(pool);
-        Collections.shuffle(copy, random);
+        Collections.shuffle(copy);
         return copy.subList(0, count);
-    }
-
-    // Geração pseudoaleatória de códigos em base32 simplificada, evitando visuais ambíguos.
-    private String generateUniqueCode() {
-        String code;
-        do {
-            code = generateCode();
-        } while (gamesByCode.containsKey(code));
-        return code;
-    }
-
-    private String generateCode() {
-        final String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        StringBuilder sb = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
-            int idx = random.nextInt(alphabet.length());
-            sb.append(alphabet.charAt(idx));
-        }
-        return sb.toString();
     }
 
     public record GameDescriptor(String code,

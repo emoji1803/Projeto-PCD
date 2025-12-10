@@ -2,8 +2,12 @@ package pt.iskahoot.server.game;
 
 import pt.iskahoot.common.model.Player;
 import pt.iskahoot.common.model.Question;
+import pt.iskahoot.common.model.QuestionType;
 import pt.iskahoot.common.model.Team;
+import pt.iskahoot.server.coordination.ModifiedCountDownLatch;
+import pt.iskahoot.server.coordination.Barrier;
 
+import java.io.BufferedWriter;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,11 +15,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Guarda o estado mutável de uma sessão de jogo. Nesta entrega o foco é
- * gerir registos e configuração inicial; a coordenação de rondas será
- * acrescentada em fases seguintes.
+ * Guarda o estado mutável de uma sessão de jogo incluindo coordenação de rondas.
  */
 public final class GameState {
 
@@ -26,6 +29,16 @@ public final class GameState {
 
     private final Map<String, Team> teamsByName;
     private final Map<String, Player> playersByUsername;
+    
+    // Estado do jogo e coordenação de rondas
+    private GameStatus status;
+    private int currentQuestionIndex;
+    private final Map<String, PlayerConnection> playerConnections;
+    private final Map<String, PlayerAnswer> currentRoundAnswers;
+    
+    // Coordenação para perguntas individuais e de equipa
+    private ModifiedCountDownLatch currentCountDownLatch;
+    private Map<String, Barrier> currentTeamBarriers;
 
     public GameState(String code, GameConfiguration configuration, List<Question> questions) {
         this.code = Objects.requireNonNull(code, "code must not be null");
@@ -38,6 +51,14 @@ public final class GameState {
         this.createdAt = Instant.now();
         this.teamsByName = new HashMap<>();
         this.playersByUsername = new HashMap<>();
+        
+        // Inicialização do estado do jogo
+        this.status = GameStatus.WAITING;
+        this.currentQuestionIndex = -1;
+        this.playerConnections = new ConcurrentHashMap<>();
+        this.currentRoundAnswers = new ConcurrentHashMap<>();
+        this.currentCountDownLatch = null;
+        this.currentTeamBarriers = new HashMap<>();
     }
 
     public String code() {
@@ -57,8 +78,8 @@ public final class GameState {
     }
 
     public synchronized RegistrationResult registerPlayer(String teamName, String username) {
-        // Bloqueio externo garante que dois jogadores não entram simultaneamente
-        // na mesma fase de validação, evitando duplicações.
+        // Bloqueio  garante que dois jogadores não entram ao mesmo tempo e nao repetiam nome 
+      
         if (playersByUsername.containsKey(username)) {
             return RegistrationResult.rejected("Username is already in use: " + username);
         }
@@ -95,6 +116,159 @@ public final class GameState {
         return snapshot;
     }
 
+    public synchronized void registerPlayerConnection(String username, BufferedWriter writer) {
+        playerConnections.put(username, new PlayerConnection(username, writer));
+    }
+
+    public synchronized Map<String, PlayerConnection> getPlayerConnections() {
+        return new HashMap<>(playerConnections);
+    }
+
+    public synchronized GameStatus getStatus() {
+        return status;
+    }
+
+    public synchronized void setStatus(GameStatus status) {
+        this.status = status;
+    }
+
+    public synchronized int getCurrentQuestionIndex() {
+        return currentQuestionIndex;
+    }
+
+    public synchronized Question getCurrentQuestion() {
+        if (currentQuestionIndex < 0 || currentQuestionIndex >= questions.size()) {
+            return null;
+        }
+        return questions.get(currentQuestionIndex);
+    }
+
+    public synchronized void nextQuestion() {
+        currentQuestionIndex++;
+        currentRoundAnswers.clear();
+    }
+
+    public synchronized boolean hasMoreQuestions() {
+        return currentQuestionIndex < questions.size() - 1;
+    }
+
+    public synchronized void recordAnswer(String username, int answerIndex, long responseTimeMs) {
+        currentRoundAnswers.put(username, new PlayerAnswer(username, answerIndex, responseTimeMs));
+    }
+
+    public synchronized Map<String, PlayerAnswer> getCurrentRoundAnswers() {
+        return new HashMap<>(currentRoundAnswers);
+    }
+
+    public synchronized void setCurrentCountDownLatch(ModifiedCountDownLatch latch) {
+        this.currentCountDownLatch = latch;
+    }
+
+    public synchronized ModifiedCountDownLatch getCurrentCountDownLatch() {
+        return currentCountDownLatch;
+    }
+
+    public synchronized void setTeamBarrier(String teamName, Barrier barrier) {
+        currentTeamBarriers.put(teamName, barrier);
+    }
+
+    public synchronized Barrier getTeamBarrier(String teamName) {
+        return currentTeamBarriers.get(teamName);
+    }
+
+    public synchronized void clearTeamBarriers() {
+        currentTeamBarriers.clear();
+    }
+
+    public synchronized Team getTeam(String teamName) {
+        return teamsByName.get(teamName);
+    }
+
+    public synchronized Map<String, Team> getAllTeams() {
+        return new HashMap<>(teamsByName);
+    }
+
+    /**
+     * Calcula e atribui pontuação para a ronda atual.
+     */
+    public synchronized void calculateAndApplyScores() {
+        Question currentQuestion = getCurrentQuestion();
+        if (currentQuestion == null) {
+            return;
+        }
+
+        if (currentQuestion.type() == QuestionType.INDIVIDUAL) {
+            calculateIndividualScores(currentQuestion);
+        } else {
+            calculateTeamScores(currentQuestion);
+        }
+    }
+
+    private void calculateIndividualScores(Question question) {
+        int correctIndex = question.correctIndex();
+        int basePoints = question.points();
+
+        for (PlayerAnswer answer : currentRoundAnswers.values()) {
+            if (answer.answerIndex() == correctIndex) {
+                Player player = playersByUsername.get(answer.username());
+                if (player != null) {
+                    Team team = teamsByName.get(player.teamName());
+                    if (team != null) {
+                        // O fator de bónus é aplicado quando a resposta é registada no CountDownLatch
+                        // Por agora, aplicamos pontuação base
+                        team.addScore(basePoints);
+                    }
+                }
+            }
+        }
+    }
+
+    private void calculateTeamScores(Question question) {
+        int correctIndex = question.correctIndex();
+        int basePoints = question.points();
+
+        // Para perguntas de equipa, calculamos por equipa
+        Map<String, List<PlayerAnswer>> answersByTeam = new HashMap<>();
+        for (PlayerAnswer answer : currentRoundAnswers.values()) {
+            Player player = playersByUsername.get(answer.username());
+            if (player != null) {
+                answersByTeam.computeIfAbsent(player.teamName(), k -> new ArrayList<>()).add(answer);
+            }
+        }
+
+        // Para cada equipa, verificamos se todos responderam corretamente
+        for (Map.Entry<String, List<PlayerAnswer>> entry : answersByTeam.entrySet()) {
+            String teamName = entry.getKey();
+            List<PlayerAnswer> teamAnswers = entry.getValue();
+            
+            Team team = teamsByName.get(teamName);
+            if (team == null) {
+                continue;
+            }
+
+            // Verificar se todos da equipa responderam
+            Barrier barrier = currentTeamBarriers.get(teamName);
+            if (barrier != null && barrier.isComplete()) {
+                // Melhor resposta ou consenso - aqui usamos consenso simples
+                boolean allCorrect = teamAnswers.stream()
+                    .allMatch(a -> a.answerIndex() == correctIndex);
+                
+                if (allCorrect && !teamAnswers.isEmpty()) {
+                    // Todos acertaram - pontuação duplicada
+                    team.addScore(basePoints * 2);
+                } else {
+                    // Apenas quem acertou ganha pontos
+                    long correctCount = teamAnswers.stream()
+                        .filter(a -> a.answerIndex() == correctIndex)
+                        .count();
+                    if (correctCount > 0) {
+                        team.addScore(basePoints);
+                    }
+                }
+            }
+        }
+    }
+
     public record TeamSnapshot(String name, int players, int score) {
     }
 
@@ -111,5 +285,17 @@ public final class GameState {
         static RegistrationResult rejected(String message) {
             return new RegistrationResult(false, message, null, 0, 0);
         }
+    }
+
+    public record PlayerConnection(String username, BufferedWriter writer) {
+    }
+
+    public record PlayerAnswer(String username, int answerIndex, long responseTimeMs) {
+    }
+
+    public enum GameStatus {
+        WAITING,      // Aguardando jogadores
+        IN_PROGRESS,  // Jogo em andamento
+        FINISHED      // Jogo terminado
     }
 }

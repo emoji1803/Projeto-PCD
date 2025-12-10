@@ -5,13 +5,15 @@ import org.slf4j.LoggerFactory;
 import pt.iskahoot.common.model.Question;
 import pt.iskahoot.server.game.GameConfiguration;
 import pt.iskahoot.server.game.GameManager;
+import pt.iskahoot.server.game.GameOrchestrator;
+import pt.iskahoot.server.game.GameState;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Scanner;
 
 /**
- * Interface textual simples para gerir comandos do servidor nesta fase
- * inicial.
+ * TUI simples , com run , deal de conecoes e comandos.
  */
 public final class ServerCli implements Runnable {
 
@@ -52,6 +54,7 @@ public final class ServerCli implements Runnable {
             Bem-vindo ao IsKahoot!
             Comandos disponíveis:
               new <equipas> <jogadores_por_equipa> <perguntas>
+              start <codigo_jogo>
               list
               help
               exit
@@ -64,6 +67,7 @@ public final class ServerCli implements Runnable {
         try {
             switch (command) {
                 case "new" -> createNewGame(parts);
+                case "start" -> startGame(parts);
                 case "list" -> listGames();
                 case "help" -> printHeader();
                 case "exit", "quit" -> stop();
@@ -106,6 +110,46 @@ public final class ServerCli implements Runnable {
                 descriptor.configuration().playersPerTeam(),
                 descriptor.registeredPlayers());
         }
+    }
+
+    private void startGame(String[] parts) {
+        if (parts.length != 2) {
+            throw new IllegalArgumentException("Uso: start <codigo_jogo>");
+        }
+        
+        String gameCode = parts[1].toUpperCase(Locale.ROOT);
+        Optional<GameState> gameOpt = gameManager.findGame(gameCode);
+        
+        if (gameOpt.isEmpty()) {
+            System.out.println("Jogo não encontrado: " + gameCode);
+            return;
+        }
+        
+        GameState gameState = gameOpt.get();
+        
+        if (gameState.getStatus() != GameState.GameStatus.WAITING) {
+            System.out.println("Jogo " + gameCode + " já está em andamento ou terminado.");
+            return;
+        }
+        
+        System.out.printf("A iniciar jogo %s com %d jogadores...%n", 
+            gameCode, gameState.registeredPlayers());
+        
+        // Iniciar o jogo numa thread separada
+        Thread gameThread = new Thread(() -> {
+            try {
+                GameOrchestrator orchestrator = new GameOrchestrator(gameState);
+                orchestrator.startGame();
+            } catch (Exception e) {
+                LOGGER.error("Error running game {}", gameCode, e);
+                System.err.println("Erro ao executar jogo: " + e.getMessage());
+            }
+        }, "game-" + gameCode);
+        
+        gameThread.setDaemon(false);
+        gameThread.start();
+        
+        System.out.println("Jogo iniciado!");
     }
 
     private void stop() {
