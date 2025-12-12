@@ -129,6 +129,10 @@ public final class ClientConnectionHandler implements Runnable {
             if (currentPlayers >= expectedPlayers) {
                 LOGGER.info("All players connected to game {}. Starting automatically...", gameState.code());
                 
+                // CRITICAL: Mudar status IMEDIATAMENTE dentro do synchronized block
+                // para prevenir race condition onde múltiplas threads tentam iniciar o jogo
+                gameState.setStatus(GameState.GameStatus.IN_PROGRESS);
+                
                 // Iniciar o jogo numa thread separada
                 Thread gameThread = new Thread(() -> {
                     try {
