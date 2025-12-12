@@ -121,8 +121,16 @@ public final class ClientConnectionHandler implements Runnable {
                 } else {
                     LOGGER.warn("Unexpected message type during game: {}", message.type());
                 }
+                
+                // Verificar se o jogo terminou
+                if (gameState.getStatus() == GameState.GameStatus.FINISHED) {
+                    LOGGER.info("Game finished, closing connection for player {}", username);
+                    break;
+                }
             } catch (Exception e) {
                 LOGGER.error("Error processing message from player {}", username, e);
+                // Se houver erro crítico, sair do loop
+                break;
             }
         }
     }
@@ -143,20 +151,19 @@ public final class ClientConnectionHandler implements Runnable {
 
         LOGGER.info("Player {} answered {} (response time: {}ms)", username, answerIndex, responseTime);
 
-        // Registar a resposta no estado do jogo
-        gameState.recordAnswer(username, answerIndex, responseTime);
-
         // Coordenar com o mecanismo apropriado
         Question currentQuestion = gameState.getCurrentQuestion();
         if (currentQuestion == null) {
             return;
         }
 
+        int bonusFactor = 1; // Por defeito, sem bónus
+
         if (currentQuestion.type() == QuestionType.INDIVIDUAL) {
-            // Perguntas individuais: decrementar CountDownLatch
+            // Perguntas individuais: decrementar CountDownLatch e obter bonusFactor
             ModifiedCountDownLatch latch = gameState.getCurrentCountDownLatch();
             if (latch != null) {
-                int bonusFactor = latch.countDown();
+                bonusFactor = latch.countDown();
                 LOGGER.debug("Player {} bonus factor: {}", username, bonusFactor);
             }
         } else {
@@ -169,6 +176,9 @@ public final class ClientConnectionHandler implements Runnable {
                 }
             }
         }
+
+        // Registar a resposta no estado do jogo com o bonusFactor
+        gameState.recordAnswer(username, answerIndex, responseTime, bonusFactor);
     }
 
     private boolean hasRequiredFields(Message message) {

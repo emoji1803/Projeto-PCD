@@ -117,7 +117,7 @@ public final class ServerCli implements Runnable {
             throw new IllegalArgumentException("Uso: start <codigo_jogo>");
         }
         
-        String gameCode = parts[1].toUpperCase(Locale.ROOT);
+        String gameCode = parts[1];
         Optional<GameState> gameOpt = gameManager.findGame(gameCode);
         
         if (gameOpt.isEmpty()) {
@@ -130,6 +130,25 @@ public final class ServerCli implements Runnable {
         if (gameState.getStatus() != GameState.GameStatus.WAITING) {
             System.out.println("Jogo " + gameCode + " já está em andamento ou terminado.");
             return;
+        }
+        
+        // Verificar se há jogadores suficientes
+        int expectedPlayers = gameState.configuration().teamCount() * 
+                            gameState.configuration().playersPerTeam();
+        int currentPlayers = gameState.registeredPlayers();
+        
+        if (currentPlayers < expectedPlayers) {
+            System.out.printf("Aviso: Jogo configurado para %d jogadores mas apenas %d estão conectados.%n",
+                expectedPlayers, currentPlayers);
+            System.out.print("Deseja iniciar mesmo assim? (s/n): ");
+            
+            if (scanner.hasNextLine()) {
+                String response = scanner.nextLine().trim().toLowerCase(Locale.ROOT);
+                if (!response.equals("s") && !response.equals("sim") && !response.equals("y") && !response.equals("yes")) {
+                    System.out.println("Início do jogo cancelado.");
+                    return;
+                }
+            }
         }
         
         System.out.printf("A iniciar jogo %s com %d jogadores...%n", 

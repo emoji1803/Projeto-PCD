@@ -50,6 +50,13 @@ public class GameOrchestrator {
         gameState.setStatus(GameState.GameStatus.FINISHED);
         broadcastGameEnd();
         LOGGER.info("Game {} finished", gameState.code());
+        
+        // Dar tempo para os clientes processarem a mensagem de fim de jogo
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void runQuestionRound() {
