@@ -110,12 +110,29 @@ Comandos disponíveis na consola do servidor:
 
 ## Como executar o cliente
 
+### Cliente Linha de Comando
 ```bash
 mvn exec:java -Dexec.mainClass=pt.iskahoot.client.IsKahootClient \
   -Dexec.args="localhost 8080 game0 TeamA Alice"
 ```
 
-Sem argumentos o cliente entra em modo interativo e pede os parâmetros.
+### Cliente GUI Swing (Recomendado) ⭐
+```bash
+mvn exec:java -Dexec.mainClass=pt.iskahoot.client.IsKahootImprovedSwingClient \
+  -Dexec.args="localhost 8080 game0 TeamA Alice"
+```
+
+Ou sem argumentos para diálogo interativo:
+```bash
+mvn exec:java -Dexec.mainClass=pt.iskahoot.client.IsKahootImprovedSwingClient
+```
+
+**Funcionalidades da GUI:**
+- ✨ Placar lateral sempre visível
+- ✨ Perguntas com opções em radio buttons
+- ✨ Resposta correta destacada a verde após cada ronda
+- ✨ Destaque visual da tua equipa no placar (★)
+- ✨ Log de histórico em tempo real
 
 ### Exemplo Completo de Jogo
 

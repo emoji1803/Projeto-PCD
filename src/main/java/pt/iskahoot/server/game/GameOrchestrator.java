@@ -121,20 +121,41 @@ public class GameOrchestrator {
             gameState.setTeamBarrier(team.name(), barrier);
         }
 
-        // Aguardar com timeout
+        // Aguardar até que todas as equipas completem OU timeout
         long timeoutMs = DEFAULT_QUESTION_TIMEOUT * 1000L;
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        
         try {
-            Thread.sleep(timeoutMs);
+            // Polling: verificar periodicamente se todas as barreiras estão completas
+            while (System.currentTimeMillis() < deadline) {
+                boolean allTeamsComplete = true;
+                for (Team team : teams.values()) {
+                    Barrier barrier = gameState.getTeamBarrier(team.name());
+                    if (barrier != null && !barrier.isComplete()) {
+                        allTeamsComplete = false;
+                        break;
+                    }
+                }
+                
+                if (allTeamsComplete) {
+                    LOGGER.info("All teams completed answering, advancing immediately");
+                    return; // Todos responderam, avançar imediatamente
+                }
+                
+                // Pequena pausa antes de verificar novamente
+                Thread.sleep(100);
+            }
+            
+            // Timeout atingido - marcar barreiras como expiradas
+            LOGGER.info("Team question timeout reached");
+            for (Team team : teams.values()) {
+                Barrier barrier = gameState.getTeamBarrier(team.name());
+                if (barrier != null) {
+                    barrier.expire();
+                }
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        }
-
-        // Marcar todas as barreiras como expiradas
-        for (Team team : teams.values()) {
-            Barrier barrier = gameState.getTeamBarrier(team.name());
-            if (barrier != null) {
-                barrier.expire();
-            }
         }
     }
 
