@@ -152,8 +152,8 @@ public final class GameState {
         return currentQuestionIndex < questions.size() - 1;
     }
 
-    public synchronized void recordAnswer(String username, int answerIndex, long responseTimeMs) {
-        currentRoundAnswers.put(username, new PlayerAnswer(username, answerIndex, responseTimeMs));
+    public synchronized void recordAnswer(String username, int answerIndex, long responseTimeMs, int bonusFactor) {
+        currentRoundAnswers.put(username, new PlayerAnswer(username, answerIndex, responseTimeMs, bonusFactor));
     }
 
     public synchronized Map<String, PlayerAnswer> getCurrentRoundAnswers() {
@@ -214,9 +214,9 @@ public final class GameState {
                 if (player != null) {
                     Team team = teamsByName.get(player.teamName());
                     if (team != null) {
-                        // O fator de bónus é aplicado quando a resposta é registada no CountDownLatch
-                        // Por agora, aplicamos pontuação base
-                        team.addScore(basePoints);
+                        // Aplicar pontuação com o bonusFactor obtido do CountDownLatch
+                        int pointsToAdd = basePoints * answer.bonusFactor();
+                        team.addScore(pointsToAdd);
                     }
                 }
             }
@@ -236,7 +236,7 @@ public final class GameState {
             }
         }
 
-        // Para cada equipa, verificamos se todos responderam corretamente
+        // Para cada equipa, verificamos se todos responderam
         for (Map.Entry<String, List<PlayerAnswer>> entry : answersByTeam.entrySet()) {
             String teamName = entry.getKey();
             List<PlayerAnswer> teamAnswers = entry.getValue();
@@ -246,25 +246,32 @@ public final class GameState {
                 continue;
             }
 
-            // Verificar se todos da equipa responderam
-            Barrier barrier = currentTeamBarriers.get(teamName);
-            if (barrier != null && barrier.isComplete()) {
-                // Melhor resposta ou consenso - aqui usamos consenso simples
-                boolean allCorrect = teamAnswers.stream()
-                    .allMatch(a -> a.answerIndex() == correctIndex);
-                
-                if (allCorrect && !teamAnswers.isEmpty()) {
-                    // Todos acertaram - pontuação duplicada
-                    team.addScore(basePoints * 2);
-                } else {
-                    // Apenas quem acertou ganha pontos
-                    long correctCount = teamAnswers.stream()
-                        .filter(a -> a.answerIndex() == correctIndex)
-                        .count();
-                    if (correctCount > 0) {
-                        team.addScore(basePoints);
-                    }
-                }
+            // Verificar quantos membros responderam
+            int expectedMembers = team.size();
+            int respondedMembers = teamAnswers.size();
+            
+            // Contar respostas corretas
+            long correctCount = teamAnswers.stream()
+                .filter(a -> a.answerIndex() == correctIndex)
+                .count();
+            
+            // Lógica de pontuação para equipas:
+            // - Se todos responderam e todos acertaram: pontuação duplicada
+            // - Se todos responderam mas nem todos acertaram: pontuação da melhor resposta
+            // - Se tempo expirou sem todos responderem: sem bonificação
+            
+            if (correctCount == 0) {
+                // Ninguém acertou - sem pontos
+                continue;
+            }
+            
+            if (respondedMembers == expectedMembers && correctCount == expectedMembers) {
+                // Todos responderam e todos acertaram - pontuação duplicada
+                team.addScore(basePoints * 2);
+            } else if (correctCount > 0) {
+                // Pelo menos alguém acertou - pontuação simples
+                // Sem bonificação se não todos responderam ou não todos acertaram
+                team.addScore(basePoints);
             }
         }
     }
@@ -290,7 +297,7 @@ public final class GameState {
     public record PlayerConnection(String username, BufferedWriter writer) {
     }
 
-    public record PlayerAnswer(String username, int answerIndex, long responseTimeMs) {
+    public record PlayerAnswer(String username, int answerIndex, long responseTimeMs, int bonusFactor) {
     }
 
     public enum GameStatus {

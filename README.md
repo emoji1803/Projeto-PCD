@@ -2,12 +2,14 @@
 
 Implementação do projeto distribuído de PCD - Jogo concorrente e distribuído inspirado no Kahoot!
 
-Esta implementação cobre as fases 1-5 do enunciado:
+Esta implementação cobre as fases 1-7 do enunciado:
 - **Fase 1**: Cliente TUI para interação com o jogo
 - **Fase 2**: Estrutura GameState para gestão do estado do jogo
 - **Fase 3**: Carregamento de perguntas em formato JSON
 - **Fase 4**: Servidor e ligação inicial dos clientes
 - **Fase 5**: Troca de mensagens entre clientes e servidor, ciclo de jogo completo
+- **Fase 6**: Processamento de respostas com CountDownLatch e Barrier
+- **Fase 7**: Desenvolvimento do ciclo completo e coordenação de fim de jogo
 
 ## Destaques da Implementação
 
@@ -26,8 +28,8 @@ Os jogos agora recebem códigos sequenciais (`game0`, `game1`, `game2`, ...) em 
 - `Barrier` com variáveis condicionais
 
 ✅ **Dois tipos de perguntas**:
-- Individuais com bonificação para os primeiros
-- De equipa com coordenação por barreira
+- Individuais com bonificação para os primeiros (2x pontos)
+- De equipa com coordenação por barreira (2x pontos se todos acertarem)
 
 ✅ **Protocolo de mensagens JSON** entre cliente e servidor
 
@@ -36,6 +38,18 @@ Os jogos agora recebem códigos sequenciais (`game0`, `game1`, `game2`, ...) em 
 ✅ **Gestão de estado do jogo** em `GameState`
 
 ✅ **Evita uso excessivo de static** (apenas onde necessário, como constantes e métodos utilitários)
+
+✅ **Processamento de respostas** (Tarefa 6):
+- CountDownLatch aplicado em perguntas individuais
+- Barrier aplicado em perguntas de equipa
+- Bonificação correta para primeiros jogadores
+- Contabilização de pontos por tipo de pergunta
+
+✅ **Ciclo e fim de jogo** (Tarefa 7):
+- Ciclo completo de perguntas até ao fim
+- Interrupção correta de threads ao terminar
+- Classificação final ordenada
+- Coordenação de encerramento graceful
 
 ## Requisitos
 

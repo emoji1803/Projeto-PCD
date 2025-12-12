@@ -12,6 +12,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Scanner;
@@ -247,8 +249,15 @@ public final class IsKahootClient {
         System.out.println("CLASSIFICAÇÃO FINAL:");
         System.out.println();
         
+        // Ordenar equipas por pontuação (descendente)
+        List<JsonObject> teams = new ArrayList<>();
         for (int i = 0; i < finalLeaderboard.size(); i++) {
-            JsonObject team = finalLeaderboard.get(i).getAsJsonObject();
+            teams.add(finalLeaderboard.get(i).getAsJsonObject());
+        }
+        teams.sort((a, b) -> b.get("score").getAsInt() - a.get("score").getAsInt());
+        
+        for (int i = 0; i < teams.size(); i++) {
+            JsonObject team = teams.get(i);
             String medal = i == 0 ? "🥇" : i == 1 ? "🥈" : i == 2 ? "🥉" : "  ";
             System.out.printf("%s %d. %s - %d pontos (%d jogadores)%n",
                 medal,
