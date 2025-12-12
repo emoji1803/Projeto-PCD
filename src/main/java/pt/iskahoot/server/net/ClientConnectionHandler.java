@@ -97,6 +97,9 @@ public final class ClientConnectionHandler implements Runnable {
             sendJoinAccepted(writer, gameState);
             LOGGER.info("Player {} joined game {} (team {})", username, gameCode, teamName);
 
+            // Verificar se todos os jogadores esperados já se conectaram
+            checkAndStartGameIfReady(gameState);
+
             // Manter conexão ativa e processar respostas durante o jogo
             handleGameLoop(reader, writer);
             
@@ -104,6 +107,48 @@ public final class ClientConnectionHandler implements Runnable {
             LOGGER.error("Error handling client connection for user {}", username, ex);
         } finally {
             LOGGER.info("Connection closed for player {}", username);
+        }
+    }
+
+    /**
+     * Verifica se todos os jogadores esperados já se conectaram e inicia o jogo automaticamente.
+     */
+    private void checkAndStartGameIfReady(GameState gameState) {
+        synchronized (gameState) {
+            // Verificar se o jogo já está em andamento ou terminado
+            if (gameState.getStatus() != GameState.GameStatus.WAITING) {
+                return;
+            }
+
+            // Calcular número de jogadores esperados
+            int expectedPlayers = gameState.configuration().teamCount() * 
+                                gameState.configuration().playersPerTeam();
+            int currentPlayers = gameState.registeredPlayers();
+
+            // Se todos os jogadores esperados estão conectados, iniciar o jogo
+            if (currentPlayers >= expectedPlayers) {
+                LOGGER.info("All players connected to game {}. Starting automatically...", gameState.code());
+                
+                // Iniciar o jogo numa thread separada
+                Thread gameThread = new Thread(() -> {
+                    try {
+                        // Pequena pausa para garantir que todos os clientes processaram JOIN_ACCEPTED
+                        Thread.sleep(1000);
+                        
+                        pt.iskahoot.server.game.GameOrchestrator orchestrator = 
+                            new pt.iskahoot.server.game.GameOrchestrator(gameState);
+                        orchestrator.startGame();
+                    } catch (Exception e) {
+                        LOGGER.error("Error running game {}", gameState.code(), e);
+                    }
+                }, "game-" + gameState.code());
+                
+                gameThread.setDaemon(false);
+                gameThread.start();
+            } else {
+                LOGGER.info("Game {} waiting for players: {}/{}", 
+                    gameState.code(), currentPlayers, expectedPlayers);
+            }
         }
     }
 
